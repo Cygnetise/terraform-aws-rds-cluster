@@ -47,3 +47,8 @@ output "cluster_resource_id" {
   value       = "${join("", aws_rds_cluster.default.*.cluster_resource_id )}"
   description = "The region-unique, immutable identifie of the cluster."
 }
+
+output "security_group_id" {
+  value       = "${join("", aws_security_group.default.*.id)}"
+  description = "The rds attached security group id"
+}
