@@ -12,31 +12,19 @@ module "label" {
 resource "aws_security_group" "default" {
   count       = var.enabled ? 1 : 0
   name        = module.label.id
-  description = "Allow inbound traffic from Security Groups and CIDRs"
+  description = "RDS default security group"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port       = var.db_port
-    to_port         = var.db_port
-    protocol        = "tcp"
-    security_groups = var.security_groups
-  }
-
-  ingress {
-    from_port   = var.db_port
-    to_port     = var.db_port
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   tags = module.label.tags
+}
+
+resource "aws_security_group_rule" "default_egress" {
+  type = "egress"
+  from_port = 0
+  to_port = 0
+  protocol = "-1"
+  cidr_blocks = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.default[0].id
 }
 
 resource "aws_rds_cluster" "default" {
