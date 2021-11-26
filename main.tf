@@ -1,3 +1,9 @@
+locals {
+  min_instance_count     = var.autoscaling_enabled ? var.autoscaling_min_capacity : var.cluster_size
+  cluster_instance_count = var.enabled ? local.min_instance_count : 0
+  is_regional_cluster    = var.cluster_type == "regional"
+}
+
 module "label" {
   source     = "git::https://github.com/cloudposse/terraform-null-label.git?ref=tags/0.14.1"
   namespace  = var.namespace
@@ -8,6 +14,7 @@ module "label" {
   tags       = var.tags
   enabled    = var.enabled
 }
+
 
 resource "aws_security_group" "default" {
   count       = var.enabled ? 1 : 0
@@ -28,7 +35,7 @@ resource "aws_security_group_rule" "default_egress" {
 }
 
 resource "aws_rds_cluster" "default" {
-  count                               = var.enabled ? 1 : 0
+  count                               = var.enabled && local.is_regional_cluster ? 1 : 0
   cluster_identifier                  = module.label.id
   database_name                       = var.db_name
   master_username                     = var.admin_user
@@ -44,7 +51,11 @@ resource "aws_rds_cluster" "default" {
   vpc_security_group_ids              = [join("", aws_security_group.default.*.id)]
   preferred_maintenance_window        = var.maintenance_window
   db_subnet_group_name                = join("", aws_db_subnet_group.default.*.name)
-  db_cluster_parameter_group_name     = join("", aws_rds_cluster_parameter_group.default.*.name)
+  source_region                       = var.source_region
+
+  # Disabled as we use the default which is generated with the DB
+  # db_cluster_parameter_group_name   = join("", aws_rds_cluster_parameter_group.default.*.name)
+
   iam_database_authentication_enabled = var.iam_database_authentication_enabled
   tags                                = module.label.tags
   engine                              = var.engine
@@ -61,23 +72,85 @@ resource "aws_rds_cluster" "default" {
     }
   }
 
+  lifecycle {
+    ignore_changes = [global_cluster_identifier]
+  }
+
+  depends_on = [
+    aws_db_subnet_group.default,
+    # aws_rds_cluster_parameter_group.default,
+    aws_security_group.default,
+  ]
+
   replication_source_identifier   = var.replication_source_identifier
   enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
   deletion_protection             = var.deletion_protection
 }
 
-locals {
-  min_instance_count     = var.autoscaling_enabled ? var.autoscaling_min_capacity : var.cluster_size
-  cluster_instance_count = var.enabled ? local.min_instance_count : 0
+resource "aws_rds_cluster" "replica" {
+  count                               = var.enabled && ! local.is_regional_cluster ? 1 : 0
+  cluster_identifier                  = module.label.id
+  database_name                       = var.db_name
+  master_username                     = var.admin_user
+  master_password                     = var.admin_password
+  backup_retention_period             = var.retention_period
+  preferred_backup_window             = var.backup_window
+  final_snapshot_identifier           = lower(module.label.id)
+  skip_final_snapshot                 = var.skip_final_snapshot
+  apply_immediately                   = var.apply_immediately
+  storage_encrypted                   = var.storage_encrypted
+  kms_key_id                          = var.kms_key_arn
+  snapshot_identifier                 = var.snapshot_identifier
+  vpc_security_group_ids              = [join("", aws_security_group.default.*.id)]
+  preferred_maintenance_window        = var.maintenance_window
+  db_subnet_group_name                = join("", aws_db_subnet_group.default.*.name)
+  source_region                       = var.source_region
+
+  global_cluster_identifier = var.global_cluster_identifier
+
+  iam_database_authentication_enabled = var.iam_database_authentication_enabled
+  tags                                = module.label.tags
+  engine                              = var.engine
+  engine_version                      = var.engine_version
+  engine_mode                         = var.engine_mode
+
+  dynamic "scaling_configuration" {
+    for_each = var.scaling_configuration
+    content {
+      auto_pause               = lookup(scaling_configuration.value, "auto_pause", null)
+      max_capacity             = lookup(scaling_configuration.value, "max_capacity", null)
+      min_capacity             = lookup(scaling_configuration.value, "min_capacity", null)
+      seconds_until_auto_pause = lookup(scaling_configuration.value, "seconds_until_auto_pause", null)
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      replication_source_identifier, # will be set/managed by Global Cluster
+      snapshot_identifier,           # if created from a snapshot, will be non-null at creation, but null afterwards
+    ]
+  }
+
+  depends_on = [
+    aws_db_subnet_group.default,
+    aws_security_group.default,
+  ]
+
+  replication_source_identifier   = var.replication_source_identifier
+  enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
+  deletion_protection             = var.deletion_protection
 }
 
 resource "aws_rds_cluster_instance" "default" {
   count                           = local.cluster_instance_count
   identifier                      = "${module.label.id}-${count.index + 1}"
-  cluster_identifier              = join("", aws_rds_cluster.default.*.id)
+  cluster_identifier              = coalesce(join("", aws_rds_cluster.default.*.id), join("", aws_rds_cluster.replica.*.id))
   instance_class                  = var.instance_type
   db_subnet_group_name            = join("", aws_db_subnet_group.default.*.name)
-  db_parameter_group_name         = join("", aws_db_parameter_group.default.*.name)
+
+  # Disabled as we use the default which is generated with the DB
+  # db_parameter_group_name         = join("", aws_db_parameter_group.default.*.name)
+
   publicly_accessible             = var.publicly_accessible
   tags                            = module.label.tags
   engine                          = var.engine
@@ -87,6 +160,17 @@ resource "aws_rds_cluster_instance" "default" {
   performance_insights_enabled    = var.performance_insights_enabled
   performance_insights_kms_key_id = var.performance_insights_kms_key_id
   availability_zone               = var.instance_availability_zone
+
+  depends_on = [
+    aws_db_subnet_group.default,
+    # aws_db_parameter_group.default,
+    # aws_rds_cluster_parameter_group.default,
+    aws_rds_cluster.replica,
+  ]
+
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
 }
 
 resource "aws_db_subnet_group" "default" {
