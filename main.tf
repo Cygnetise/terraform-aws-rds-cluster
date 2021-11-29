@@ -90,9 +90,6 @@ resource "aws_rds_cluster" "default" {
 resource "aws_rds_cluster" "replica" {
   count                               = var.enabled && ! local.is_regional_cluster ? 1 : 0
   cluster_identifier                  = module.label.id
-  database_name                       = var.db_name
-  master_username                     = var.admin_user
-  master_password                     = var.admin_password
   backup_retention_period             = var.retention_period
   preferred_backup_window             = var.backup_window
   final_snapshot_identifier           = lower(module.label.id)
