@@ -6,7 +6,7 @@ locals {
 resource "aws_security_group" "default" {
   count       = module.this.enabled ? 1 : 0
   name        = module.this.id
-  description = "Allow inbound traffic from Security Groups and CIDRs"
+  description = "RDS default security group"
   vpc_id      = var.vpc_id
   tags        = module.this.tags
 }
@@ -33,15 +33,14 @@ resource "aws_security_group_rule" "ingress_cidr_blocks" {
   security_group_id = join("", aws_security_group.default.*.id)
 }
 
-resource "aws_security_group_rule" "egress" {
+resource "aws_security_group_rule" "default_egress" {
   count             = module.this.enabled ? 1 : 0
-  description       = "Allow outbound traffic"
   type              = "egress"
   from_port         = 0
   to_port           = 0
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = join("", aws_security_group.default.*.id)
+  security_group_id = aws_security_group.default[0].id
 }
 
 resource "aws_rds_cluster" "primary" {
@@ -63,7 +62,8 @@ resource "aws_rds_cluster" "primary" {
   vpc_security_group_ids              = compact(flatten([join("", aws_security_group.default.*.id), var.vpc_security_group_ids]))
   preferred_maintenance_window        = var.maintenance_window
   db_subnet_group_name                = join("", aws_db_subnet_group.default.*.name)
-  db_cluster_parameter_group_name     = join("", aws_rds_cluster_parameter_group.default.*.name)
+  # Disabled as we use the default which is generated with the DB
+  # db_cluster_parameter_group_name   = join("", aws_rds_cluster_parameter_group.default.*.name)
   iam_database_authentication_enabled = var.iam_database_authentication_enabled
   tags                                = module.this.tags
   engine                              = var.engine
@@ -116,6 +116,10 @@ resource "aws_rds_cluster" "primary" {
   enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
   deletion_protection             = var.deletion_protection
   replication_source_identifier   = var.replication_source_identifier
+
+  lifecycle {
+    ignore_changes = [global_cluster_identifier]
+  }
 }
 
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster#replication_source_identifier
@@ -138,7 +142,8 @@ resource "aws_rds_cluster" "secondary" {
   vpc_security_group_ids              = compact(flatten([join("", aws_security_group.default.*.id), var.vpc_security_group_ids]))
   preferred_maintenance_window        = var.maintenance_window
   db_subnet_group_name                = join("", aws_db_subnet_group.default.*.name)
-  db_cluster_parameter_group_name     = join("", aws_rds_cluster_parameter_group.default.*.name)
+  # Disabled as we use the default which is generated with the DB
+  # db_cluster_parameter_group_name   = join("", aws_rds_cluster_parameter_group.default.*.name)
   iam_database_authentication_enabled = var.iam_database_authentication_enabled
   tags                                = module.this.tags
   engine                              = var.engine
@@ -180,7 +185,7 @@ resource "aws_rds_cluster" "secondary" {
 
   lifecycle {
     ignore_changes = [
-      replication_source_identifier
+      replication_source_identifier, global_cluster_identifier, snapshot_identifier
     ]
   }
 }
@@ -191,7 +196,8 @@ resource "aws_rds_cluster_instance" "default" {
   cluster_identifier              = coalesce(join("", aws_rds_cluster.primary.*.id), join("", aws_rds_cluster.secondary.*.id))
   instance_class                  = var.instance_type
   db_subnet_group_name            = join("", aws_db_subnet_group.default.*.name)
-  db_parameter_group_name         = join("", aws_db_parameter_group.default.*.name)
+  # Disabled as we use the default which is generated with the DB
+  # db_parameter_group_name         = join("", aws_db_parameter_group.default.*.name)
   publicly_accessible             = var.publicly_accessible
   tags                            = module.this.tags
   engine                          = var.engine
