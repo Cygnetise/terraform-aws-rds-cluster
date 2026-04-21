@@ -3,11 +3,6 @@ output "database_name" {
   description = "Database name"
 }
 
-output "master_username" {
-  value       = local.is_primary_cluster ? join("", aws_rds_cluster.primary.*.master_username) : join("", aws_rds_cluster.secondary.*.master_username)
-  description = "Username for the master DB user"
-}
-
 output "cluster_identifier" {
   value       = local.is_primary_cluster ? join("", aws_rds_cluster.primary.*.cluster_identifier) : join("", aws_rds_cluster.secondary.*.cluster_identifier)
   description = "Cluster Identifier"

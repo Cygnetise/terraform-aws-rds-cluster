@@ -47,8 +47,7 @@ resource "aws_rds_cluster" "primary" {
   count                               = module.this.enabled && local.is_primary_cluster == true ? 1 : 0
   cluster_identifier                  = var.cluster_identifier == "" ? module.this.id : var.cluster_identifier
   database_name                       = var.db_name
-  master_username                     = var.admin_user
-  master_password                     = var.admin_password
+  manage_master_user_password         = true
   backup_retention_period             = var.retention_period
   preferred_backup_window             = var.backup_window
   copy_tags_to_snapshot               = var.copy_tags_to_snapshot
@@ -127,8 +126,6 @@ resource "aws_rds_cluster" "secondary" {
   count                               = module.this.enabled && local.is_primary_cluster == false ? 1 : 0
   cluster_identifier                  = var.cluster_identifier == "" ? module.this.id : var.cluster_identifier
   database_name                       = var.db_name
-  master_username                     = var.admin_user
-  master_password                     = var.admin_password
   backup_retention_period             = var.retention_period
   preferred_backup_window             = var.backup_window
   copy_tags_to_snapshot               = var.copy_tags_to_snapshot
