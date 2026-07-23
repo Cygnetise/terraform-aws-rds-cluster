@@ -348,6 +348,22 @@ variable "global_cluster_identifier" {
   default     = ""
 }
 
+variable "cluster_type" {
+  type        = string
+  description = <<-EOT
+    Either `regional` or `global`.
+    If `regional`, this cluster is created as the `default` (primary) resource.
+    If `global`, this cluster is created as the `replica` (secondary) resource,
+    joining the global cluster identified by `global_cluster_identifier`.
+    EOT
+  default     = "regional"
+
+  validation {
+    condition     = contains(["regional", "global"], var.cluster_type)
+    error_message = "Allowed values: `regional` (primary), `global` (secondary, part of global cluster)."
+  }
+}
+
 variable "source_region" {
   type        = string
   description = "Source Region of primary cluster, needed when using encrypted storage and region replicas"
