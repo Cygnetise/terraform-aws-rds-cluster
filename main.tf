@@ -4,9 +4,12 @@ locals {
 }
 
 resource "aws_security_group" "default" {
-  count       = module.this.enabled ? 1 : 0
-  name        = module.this.id
-  description = "Allow inbound traffic from Security Groups and CIDRs"
+  count = module.this.enabled ? 1 : 0
+  name  = module.this.id
+  # Description matches the current live value: SG descriptions are
+  # immutable in AWS, and changing this string forces replacement of a
+  # security group that other resources reference by ID.
+  description = "RDS default security group"
   vpc_id      = var.vpc_id
   tags        = module.this.tags
 }
