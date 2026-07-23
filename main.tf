@@ -195,7 +195,9 @@ resource "aws_rds_cluster_instance" "default" {
   cluster_identifier              = coalesce(join("", aws_rds_cluster.default.*.id), join("", aws_rds_cluster.replica.*.id))
   instance_class                  = var.instance_type
   db_subnet_group_name            = join("", aws_db_subnet_group.default.*.name)
-  db_parameter_group_name         = join("", aws_db_parameter_group.default.*.name)
+  # db_parameter_group_name intentionally omitted (see "default"/"replica"
+  # cluster resources above): stays on AWS's own default instance parameter
+  # group, matching current live behavior.
   publicly_accessible             = var.publicly_accessible
   tags                            = module.this.tags
   engine                          = var.engine
