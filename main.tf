@@ -190,11 +190,11 @@ resource "aws_rds_cluster" "replica" {
 }
 
 resource "aws_rds_cluster_instance" "default" {
-  count                           = local.cluster_instance_count
-  identifier                      = var.cluster_identifier == "" ? "${module.this.id}-${count.index + 1}" : "${var.cluster_identifier}-${count.index + 1}"
-  cluster_identifier              = coalesce(join("", aws_rds_cluster.default.*.id), join("", aws_rds_cluster.replica.*.id))
-  instance_class                  = var.instance_type
-  db_subnet_group_name            = join("", aws_db_subnet_group.default.*.name)
+  count                = local.cluster_instance_count
+  identifier           = var.cluster_identifier == "" ? "${module.this.id}-${count.index + 1}" : "${var.cluster_identifier}-${count.index + 1}"
+  cluster_identifier   = coalesce(join("", aws_rds_cluster.default.*.id), join("", aws_rds_cluster.replica.*.id))
+  instance_class       = var.instance_type
+  db_subnet_group_name = join("", aws_db_subnet_group.default.*.name)
   # db_parameter_group_name intentionally omitted (see "default"/"replica"
   # cluster resources above): stays on AWS's own default instance parameter
   # group, matching current live behavior.
@@ -203,6 +203,7 @@ resource "aws_rds_cluster_instance" "default" {
   engine                          = var.engine
   engine_version                  = var.engine_version
   auto_minor_version_upgrade      = var.auto_minor_version_upgrade
+  apply_immediately               = var.apply_immediately
   monitoring_interval             = var.rds_monitoring_interval
   monitoring_role_arn             = var.enhanced_monitoring_role_enabled ? join("", aws_iam_role.enhanced_monitoring.*.arn) : var.rds_monitoring_role_arn
   performance_insights_enabled    = var.performance_insights_enabled
