@@ -120,6 +120,15 @@ resource "aws_rds_cluster" "default" {
   enabled_cloudwatch_logs_exports = var.enabled_cloudwatch_logs_exports
   deletion_protection             = var.deletion_protection
   replication_source_identifier   = var.replication_source_identifier
+
+  # cyg3: var.global_cluster_identifier was previously only wired to the
+  # "replica" resource below (cluster_type = "global", i.e. a secondary
+  # joining an existing global cluster). It was never wired here on
+  # "default", so a "regional" cluster that's the *source* of a global
+  # cluster (via a separate aws_rds_global_cluster's
+  # source_db_cluster_identifier) had no way to declare that membership,
+  # and every plan tried to detach it. Wire it through here too.
+  global_cluster_identifier = var.global_cluster_identifier
 }
 
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster#replication_source_identifier
