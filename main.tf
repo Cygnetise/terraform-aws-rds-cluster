@@ -129,6 +129,24 @@ resource "aws_rds_cluster" "default" {
   # source_db_cluster_identifier) had no way to declare that membership,
   # and every plan tried to detach it. Wire it through here too.
   global_cluster_identifier = var.global_cluster_identifier
+
+  # cyg4: the master password is rotated outside Terraform (Secrets Manager
+  # single-user rotation). Without this, the next apply reads the pre-rotation
+  # value from the secret and re-sends it through ModifyDBCluster. That is a
+  # no-op in substance, but on production it queues a pointless cluster
+  # modification for the wed:03:00 maintenance window.
+  #
+  # This does not affect creation. The provider applies master_password inside
+  # the create function — including after a snapshot restore, where it issues a
+  # follow-up ModifyDBCluster — and ignore_changes governs updates only. A
+  # restored cluster still gets the configured password.
+  #
+  # The trade-off is that drift stops being self-correcting: a half-failed
+  # rotation leaves the secret and the cluster disagreeing with nothing to
+  # notice. A rotation-failure alarm is the compensating control.
+  lifecycle {
+    ignore_changes = [master_password]
+  }
 }
 
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_cluster#replication_source_identifier
